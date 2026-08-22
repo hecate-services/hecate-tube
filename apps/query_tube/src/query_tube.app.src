@@ -1,0 +1,12 @@
+{application, query_tube, [
+    {description, "QRY: HTTP read API for hecate-tube"},
+    {vsn, "0.1.0"},
+    {registered, [query_tube_sup]},
+    {mod, {query_tube_app, []}},
+    {applications, [kernel, stdlib, cowboy, macula, hecate_om,
+                    guide_tube_lifecycle, project_tube]},
+    {env, []},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, []}
+]}.

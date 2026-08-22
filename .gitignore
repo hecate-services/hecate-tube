@@ -1,0 +1,6 @@
+_build/
+_checkouts/
+rebar.lock
+*.beam
+erl_crash.dump
+doc/

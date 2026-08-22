@@ -1,0 +1,11 @@
+{application, project_tube, [
+    {description, "PRJ: read-model projections for hecate-tube"},
+    {vsn, "0.1.0"},
+    {registered, [project_tube_sup]},
+    {mod, {project_tube_app, []}},
+    {applications, [kernel, stdlib, evoq, reckon_evoq]},
+    {env, []},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, []}
+]}.

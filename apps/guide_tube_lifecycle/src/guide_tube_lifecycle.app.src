@@ -1,0 +1,11 @@
+{application, guide_tube_lifecycle, [
+    {description, "CMD: channel + video lifecycle for hecate-tube"},
+    {vsn, "0.1.0"},
+    {registered, [guide_tube_lifecycle_sup]},
+    {mod, {guide_tube_lifecycle_app, []}},
+    {applications, [kernel, stdlib, macula, hecate_om, evoq, reckon_evoq]},
+    {env, []},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, []}
+]}.
