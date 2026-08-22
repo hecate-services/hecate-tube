@@ -18,5 +18,8 @@ jobs:
       image: erlang:28
     steps:
       - uses: actions/checkout@v4
+      # video_clip_scan.erl's tests shell out to ffprobe/ffmpeg against a
+      # real fixture -- the erlang:28 image doesn't ship them.
+      - run: apt-get update && apt-get install -y --no-install-recommends ffmpeg
       - run: rebar3 lint
       - run: rebar3 eunit

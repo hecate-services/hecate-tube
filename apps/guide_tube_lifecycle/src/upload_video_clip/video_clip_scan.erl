@@ -24,8 +24,8 @@
 
 -export([probe/3]).
 
--define(FFPROBE, "/usr/bin/ffprobe").
--define(FFMPEG, "/usr/bin/ffmpeg").
+-define(FFPROBE, "ffprobe").
+-define(FFMPEG, "ffmpeg").
 -define(PROBE_TIMEOUT_MS, 15_000).
 -define(THUMBNAIL_TIMEOUT_MS, 15_000).
 -define(THUMBNAIL_SEEK, "00:00:01").
@@ -155,8 +155,20 @@ temp_thumbnail_path(ClipId) ->
 
 %% ── Subprocess runner ───────────────────────────────────────────────
 
+%% Resolved via PATH, not a hardcoded install location -- the alpine
+%% runtime image, a glibc dev box, and CI's erlang:28 (debian) container
+%% don't all put ffmpeg/ffprobe at the same path. A missing binary is an
+%% ops/deployment bug, not a per-upload content problem, but it still
+%% flows through the same {error, _} rejection path as any other scan
+%% failure rather than crashing the aggregate on enoent -- consistent
+%% with never letting an external command failure take the process down.
 run(Executable, Args, TimeoutMs) ->
-    Port = erlang:open_port({spawn_executable, Executable},
+    with_resolved(os:find_executable(Executable), Args, TimeoutMs, Executable).
+
+with_resolved(false, _Args, _TimeoutMs, Executable) ->
+    {error, {executable_not_found, Executable}};
+with_resolved(Path, Args, TimeoutMs, _Executable) ->
+    Port = erlang:open_port({spawn_executable, Path},
                              [{args, Args}, exit_status, binary, stderr_to_stdout]),
     collect(Port, <<>>, TimeoutMs).
 
