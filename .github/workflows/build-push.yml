@@ -15,6 +15,12 @@ on:
   push:
     branches: [main]
     tags:     ['v*']
+    # A push touching only docs/plans still rebuilds and re-pushes :latest
+    # with no code change, and watchtower/the reconciler roll every box
+    # watching it a few seconds later for nothing -- happened for real
+    # 2026-08-22 on a plans/ update. Excluded here, not on tag pushes
+    # (semver tags are deliberate releases, never worth skipping).
+    paths-ignore: ['**.md', 'plans/**', 'specification/**']
   workflow_dispatch:
 
 jobs:
