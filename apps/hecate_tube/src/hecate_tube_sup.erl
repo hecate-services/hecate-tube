@@ -1,5 +1,7 @@
-%% @doc Supervises this service's own processes: the QRY read API's HTTP
-%% listener.
+%% @doc Supervises this service's own processes: the HTTP listener serving
+%% both the owner-facing UI (tube_owner_ui_routes) and the QRY read API
+%% (query_tube_sup) -- one port, two route sets, since neither owns a
+%% listener of its own.
 %%
 %% Separate port from hecate_om's own `health_port' listener --
 %% hecate_om_sup already mounts GET /health there (hecate_om_health_handler),
@@ -17,6 +19,7 @@ init([]) ->
 
 http_listener() ->
     Port = application:get_env(hecate_tube, http_port, 8491),
-    Dispatch = cowboy_router:compile([{'_', query_tube_sup:routes()}]),
+    Routes = tube_owner_ui_routes:routes() ++ query_tube_sup:routes(),
+    Dispatch = cowboy_router:compile([{'_', Routes}]),
     ranch:child_spec(hecate_tube_http, ranch_tcp, [{port, Port}],
                      cowboy_clear, #{env => #{dispatch => Dispatch}}).
