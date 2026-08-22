@@ -10,4 +10,5 @@ routes() ->
     tube_dashboard_page:routes() ++
     tube_channel_configure_page:routes() ++
     tube_video_clip_upload_page:routes() ++
-    tube_video_clip_actions:routes().
+    tube_video_clip_actions:routes() ++
+    tube_owner_content_page:routes().

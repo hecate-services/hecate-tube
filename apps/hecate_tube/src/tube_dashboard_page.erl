@@ -37,10 +37,16 @@ channel_card(Channel) ->
     Name = maps:get(name, Channel, undefined),
     Description = maps:get(description, Channel, undefined),
     Tags = maps:get(tags, Channel, []),
-    [<<"<section class=\"card\"><h1>">>, tube_html:escape(Name), <<"</h1>"
+    LogoMcid = maps:get(logo_mcid, Channel, undefined),
+    [<<"<section class=\"card\">">>, logo_img(LogoMcid), <<"<h1>">>, tube_html:escape(Name), <<"</h1>"
        "<p>">>, tube_html:escape(Description), <<"</p>"
        "<p>">>, tag_spans(Tags), <<"</p>"
        "<p><a href=\"/owner/channel/configure\">Edit channel</a></p></section>">>].
+
+logo_img(undefined) -> <<>>;
+logo_img(LogoMcid) ->
+    [<<"<img class=\"logo\" src=\"/owner/content/">>, binary:encode_hex(LogoMcid),
+     <<"\" alt=\"\">">>].
 
 tag_spans(Tags) ->
     [ [<<"<span class=\"tag\">">>, tube_html:escape(T), <<"</span>">>] || T <- Tags ].

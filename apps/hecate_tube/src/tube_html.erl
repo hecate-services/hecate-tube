@@ -75,6 +75,8 @@ main { max-width: 760px; margin: 0 auto; padding: 1.5rem; }
 h1 { margin-top: 0; }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 1.25rem; margin-bottom: 1.5rem; }
+.logo { max-height: 64px; max-width: 64px; border-radius: 8px; object-fit: cover;
+  float: right; }
 .clip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 1rem; }
 .clip { display: flex; flex-direction: column; gap: .4rem; }
