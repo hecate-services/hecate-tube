@@ -108,16 +108,30 @@ upload_video_clip_rejects_missing_fields_test() ->
     ?assertEqual({error, channel_id_name_and_local_ref_required},
                  upload_video_clip_v1:new(#{name => <<"x">>})).
 
+%% `local_ref' points at a real, tiny (2KB, 1s, 32x32, h264, no audio)
+%% fixture -- video_clip_scan:probe/3 genuinely shells out to ffprobe/
+%% ffmpeg here, same as it does in production, not a stub. Confirms
+%% the scan step doesn't just compile but actually accepts a real
+%% file. See video_clip_upload_rejects_unreadable_file_test/0 below
+%% for the rejection path.
+-define(FIXTURE_CLIP, <<"apps/guide_tube_lifecycle/test/fixtures/tiny_clip.mp4">>).
+
 video_clip_aggregate_lifecycle_test() ->
     ClipId = reckon_gater_stream_id:new(<<"clip">>),
     {ok, Fresh} = video_clip_aggregate:init(ClipId),
     UploadPayload = #{command_type => upload_video_clip, clip_id => ClipId,
                       channel_id => <<"channel-1">>, name => <<"My Clip">>,
                       description => <<>>, tags => [], thumbnail_mcid => undefined,
-                      local_ref => <<"/data/clip1.mp4">>, source => <<"uploaded">>},
-    {ok, [UploadedEvent]} = video_clip_aggregate:execute(Fresh, UploadPayload),
+                      local_ref => ?FIXTURE_CLIP, source => <<"uploaded">>},
+    {ok, [UploadedEvent, ScannedEvent, AcceptedEvent]} =
+        video_clip_aggregate:execute(Fresh, UploadPayload),
     ?assertEqual(<<"video_clip_uploaded_v1">>, maps:get(event_type, UploadedEvent)),
-    Uploaded = video_clip_aggregate:apply(Fresh, UploadedEvent),
+    ?assertEqual(<<"video_clip_scanned_v1">>, maps:get(event_type, ScannedEvent)),
+    ?assertEqual(1000, maps:get(duration_ms, ScannedEvent)),
+    ?assertEqual(<<"video_clip_accepted_v1">>, maps:get(event_type, AcceptedEvent)),
+    Uploaded0 = video_clip_aggregate:apply(Fresh, UploadedEvent),
+    Uploaded1 = video_clip_aggregate:apply(Uploaded0, ScannedEvent),
+    Uploaded = video_clip_aggregate:apply(Uploaded1, AcceptedEvent),
     ?assertEqual(1, video_clip_state:status(Uploaded)),
 
     %% Cannot re-upload an already-uploaded clip
@@ -154,6 +168,31 @@ video_clip_aggregate_lifecycle_test() ->
 
     %% Cannot archive twice
     ?assertEqual({error, already_archived}, video_clip_aggregate:execute(Archived, ArchivePayload)).
+
+%% An unreadable/nonexistent file rejects the whole upload -- `uploaded'
+%% still fires (bytes were genuinely never going to exist here since
+%% the path itself is bogus, but the command was validly processed),
+%% no `scanned' event (no real measurements), and the clip can never
+%% be published afterward.
+video_clip_upload_rejects_unreadable_file_test() ->
+    ClipId = reckon_gater_stream_id:new(<<"clip">>),
+    {ok, Fresh} = video_clip_aggregate:init(ClipId),
+    UploadPayload = #{command_type => upload_video_clip, clip_id => ClipId,
+                      channel_id => <<"channel-1">>, name => <<"Bad Clip">>,
+                      description => <<>>, tags => [], thumbnail_mcid => undefined,
+                      local_ref => <<"/nonexistent/nope.mp4">>, source => <<"uploaded">>},
+    {ok, [UploadedEvent, RejectedEvent]} = video_clip_aggregate:execute(Fresh, UploadPayload),
+    ?assertEqual(<<"video_clip_uploaded_v1">>, maps:get(event_type, UploadedEvent)),
+    ?assertEqual(<<"video_clip_rejected_v1">>, maps:get(event_type, RejectedEvent)),
+    ?assertEqual(<<"file_not_found">>, maps:get(reason, RejectedEvent)),
+    Uploaded = video_clip_aggregate:apply(Fresh, UploadedEvent),
+    Rejected = video_clip_aggregate:apply(Uploaded, RejectedEvent),
+    ?assertEqual(9, video_clip_state:status(Rejected)), %% UPLOADED bor REJECTED
+
+    PublishPayload = #{command_type => publish_video_clip, clip_id => ClipId,
+                       channel_id => <<"channel-1">>},
+    ?assertEqual({error, cannot_publish},
+                 video_clip_aggregate:execute(Rejected, PublishPayload)).
 
 video_clip_projection_writes_the_store_facade_test() ->
     ensure_started(project_tube_store:start_link()),

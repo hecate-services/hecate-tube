@@ -3,6 +3,13 @@
 %% streamed straight to disk as it's received (see tube_multipart), never
 %% buffered whole in memory; the thumbnail, if any, is small enough to
 %% buffer and goes through Content (macula_feeder) like the channel logo.
+%%
+%% `maybe_upload_video_clip:dispatch/1' scans the file synchronously as
+%% part of handling the command (video_clip_scan.erl) -- this request
+%% blocks for that too, same as it already blocks for the multipart
+%% upload itself. A rejected scan is still an `{ok, ...}' dispatch
+%% result (a recorded verdict, not a command failure), so the events
+%% list has to be inspected to tell a rejection from a clean accept.
 %% Route: GET/POST /owner/clips/upload
 -module(tube_video_clip_upload_page).
 
@@ -63,12 +70,31 @@ put_thumbnail(undefined) -> {ok, undefined};
 put_thumbnail(<<>>) -> {ok, undefined};
 put_thumbnail(Bytes) -> tube_content_put:put(Bytes).
 
-reply_with_result({ok, _ClipId, _Version, _Events}, Req1, State) ->
-    tube_owner_http:redirect(<<"/">>, <<"Clip uploaded, private until you publish it.">>,
-                             Req1, State);
+reply_with_result({ok, _ClipId, _Version, Events}, Req1, State) ->
+    reply_for_verdict(rejection_reason(Events), Req1, State);
 reply_with_result({error, Reason}, Req1, State) ->
     tube_owner_http:redirect(<<"/owner/clips/upload">>,
         tube_owner_http:error_message(<<"Could not upload the clip: ">>, Reason), Req1, State).
+
+reply_for_verdict(undefined, Req1, State) ->
+    tube_owner_http:redirect(<<"/">>, <<"Clip uploaded, private until you publish it.">>,
+                             Req1, State);
+reply_for_verdict(Reason, Req1, State) ->
+    %% Not tube_owner_http:error_message/2 -- Reason is already a
+    %% clean, human-formatted binary (video_clip_rejected_v1's own
+    %% reason_to_binary/1), and error_message/2's `~p' formatting
+    %% would wrap it in visible `<<"...">>' quoting.
+    Message = iolist_to_binary([<<"Video rejected: ">>, Reason]),
+    tube_owner_http:redirect(<<"/owner/clips/upload">>, Message, Req1, State).
+
+rejection_reason(Events) ->
+    reason_from(lists:filter(fun is_rejected_event/1, Events)).
+
+is_rejected_event(Event) ->
+    maps:get(event_type, Event, undefined) =:= <<"video_clip_rejected_v1">>.
+
+reason_from([#{reason := Reason} | _]) -> Reason;
+reason_from([]) -> undefined.
 
 existing_channel() ->
     case project_tube_store:list_channels() of

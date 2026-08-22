@@ -49,7 +49,7 @@ FROM docker.io/alpine:3.22
 # private by accident failed its first pull with a bare "unauthorized", which
 # names nothing and sends you looking in the wrong place.
 LABEL org.opencontainers.image.source="https://github.com/hecate-services/hecate-tube"
-RUN apk add --no-cache ncurses-libs libstdc++ libgcc openssl ca-certificates curl
+RUN apk add --no-cache ncurses-libs libstdc++ libgcc openssl ca-certificates curl ffmpeg
 WORKDIR /app
 COPY --from=builder /build/_build/prod/rel/hecate_tube ./
 

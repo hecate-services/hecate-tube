@@ -59,8 +59,15 @@ clip_card(Clip) ->
     ViewCount = maps:get(view_count, Clip, 0),
     [<<"<article class=\"card clip\"><h3>">>, tube_html:escape(Name), <<"</h3>"
        "<span class=\"status status-">>, Status, <<"\">">>, Status, <<"</span>"
-       "<p class=\"muted\">">>, integer_to_binary(ViewCount), <<" views</p>"
-       "<div class=\"actions\">">>, clip_actions(ClipId, Status), <<"</div></article>">>].
+       "<p class=\"muted\">">>, integer_to_binary(ViewCount), <<" views</p>">>,
+     rejection_notice(Status, Clip),
+     <<"<div class=\"actions\">">>, clip_actions(ClipId, Status), <<"</div></article>">>].
+
+rejection_notice(<<"rejected">>, Clip) ->
+    Reason = maps:get(rejected_reason, Clip, <<"unknown reason">>),
+    [<<"<p class=\"muted\">Rejected: ">>, tube_html:escape(Reason), <<"</p>">>];
+rejection_notice(_Status, _Clip) ->
+    <<>>.
 
 %% `ClipId'/`Status' are always system-generated (reckon_gater_stream_id /
 %% this app's own projection), never user-supplied text -- safe to
@@ -71,6 +78,8 @@ clip_actions(ClipId, <<"uploaded">>) ->
 clip_actions(ClipId, <<"published">>) ->
     [action_button(ClipId, <<"retract">>, <<"Retract">>, false),
      action_button(ClipId, <<"archive">>, <<"Archive">>, true)];
+clip_actions(_ClipId, <<"rejected">>) ->
+    [<<"<span class=\"muted\">Try uploading again.</span>">>];
 clip_actions(_ClipId, _Archived) ->
     [<<"<span class=\"muted\">Archived</span>">>].
 

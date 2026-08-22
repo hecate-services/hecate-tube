@@ -20,15 +20,23 @@
 -export([clip_id/1, channel_id/1, status/1, local_ref/1]).
 
 -record(video_clip_state, {
-    clip_id        :: binary(),
-    channel_id     :: binary() | undefined,
-    name           :: binary() | undefined,
-    description    :: binary() | undefined,
-    tags           :: [binary()],
-    thumbnail_mcid :: binary() | undefined,
-    local_ref      :: binary() | undefined,
-    source         :: binary() | undefined,
-    status         :: non_neg_integer()
+    clip_id          :: binary(),
+    channel_id       :: binary() | undefined,
+    name             :: binary() | undefined,
+    description      :: binary() | undefined,
+    tags             :: [binary()],
+    thumbnail_mcid   :: binary() | undefined,
+    local_ref        :: binary() | undefined,
+    source           :: binary() | undefined,
+    duration_ms      :: non_neg_integer() | undefined,
+    width            :: non_neg_integer() | undefined,
+    height           :: non_neg_integer() | undefined,
+    codec            :: binary() | undefined,
+    container_format :: binary() | undefined,
+    file_size_bytes  :: non_neg_integer() | undefined,
+    has_audio        :: boolean() | undefined,
+    rejected_reason  :: binary() | undefined,
+    status           :: non_neg_integer()
 }).
 
 -opaque t() :: #video_clip_state{}.
@@ -57,6 +65,24 @@ do_apply(<<"video_clip_uploaded_v1">>, State, Event) ->
         source         = field(source, Event),
         status = State#video_clip_state.status bor ?VIDEO_CLIP_UPLOADED
     };
+do_apply(<<"video_clip_scanned_v1">>, State, Event) ->
+    State#video_clip_state{
+        duration_ms      = field(duration_ms, Event),
+        width            = field(width, Event),
+        height           = field(height, Event),
+        codec            = field(codec, Event),
+        container_format = field(container_format, Event),
+        file_size_bytes  = field(file_size_bytes, Event),
+        has_audio        = field(has_audio, Event),
+        thumbnail_mcid   = field(thumbnail_mcid, Event)
+    };
+do_apply(<<"video_clip_accepted_v1">>, State, _Event) ->
+    State;
+do_apply(<<"video_clip_rejected_v1">>, State, Event) ->
+    State#video_clip_state{
+        rejected_reason = field(reason, Event),
+        status = State#video_clip_state.status bor ?VIDEO_CLIP_REJECTED
+    };
 do_apply(<<"video_clip_published_v1">>, State, _Event) ->
     State#video_clip_state{
         status = State#video_clip_state.status bor ?VIDEO_CLIP_PUBLISHED
@@ -75,15 +101,23 @@ do_apply(_Other, State, _Event) ->
 -spec to_map(t()) -> map().
 to_map(#video_clip_state{} = S) ->
     #{
-        clip_id        => S#video_clip_state.clip_id,
-        channel_id     => S#video_clip_state.channel_id,
-        name           => S#video_clip_state.name,
-        description    => S#video_clip_state.description,
-        tags           => S#video_clip_state.tags,
-        thumbnail_mcid => S#video_clip_state.thumbnail_mcid,
-        local_ref      => S#video_clip_state.local_ref,
-        source         => S#video_clip_state.source,
-        status         => S#video_clip_state.status
+        clip_id          => S#video_clip_state.clip_id,
+        channel_id       => S#video_clip_state.channel_id,
+        name             => S#video_clip_state.name,
+        description      => S#video_clip_state.description,
+        tags             => S#video_clip_state.tags,
+        thumbnail_mcid   => S#video_clip_state.thumbnail_mcid,
+        local_ref        => S#video_clip_state.local_ref,
+        source           => S#video_clip_state.source,
+        duration_ms      => S#video_clip_state.duration_ms,
+        width            => S#video_clip_state.width,
+        height           => S#video_clip_state.height,
+        codec            => S#video_clip_state.codec,
+        container_format => S#video_clip_state.container_format,
+        file_size_bytes  => S#video_clip_state.file_size_bytes,
+        has_audio        => S#video_clip_state.has_audio,
+        rejected_reason  => S#video_clip_state.rejected_reason,
+        status           => S#video_clip_state.status
     }.
 
 clip_id(#video_clip_state{clip_id = V}) -> V.

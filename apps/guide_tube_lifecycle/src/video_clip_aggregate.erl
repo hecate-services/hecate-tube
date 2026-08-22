@@ -27,6 +27,7 @@ do_execute(upload_video_clip, _Status, _Payload) ->
 
 do_execute(publish_video_clip, Status, Payload)
   when Status band ?VIDEO_CLIP_UPLOADED =:= ?VIDEO_CLIP_UPLOADED,
+       Status band ?VIDEO_CLIP_REJECTED =:= 0,
        Status band ?VIDEO_CLIP_PUBLISHED =:= 0,
        Status band ?VIDEO_CLIP_ARCHIVED =:= 0 ->
     maybe_publish_video_clip:handle_from_map(Payload);
