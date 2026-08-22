@@ -107,11 +107,9 @@ duration_ms(DurationBin) when is_binary(DurationBin) ->
     catch _:_ -> undefined
     end.
 
-find_stream(Type, Streams) ->
-    case lists:filter(fun(S) -> maps:get(<<"codec_type">>, S, undefined) =:= Type end, Streams) of
-        [Stream | _] -> Stream;
-        []           -> undefined
-    end.
+find_stream(_Type, []) -> undefined;
+find_stream(Type, [#{<<"codec_type">> := Type} = Stream | _Rest]) -> Stream;
+find_stream(Type, [_Stream | Rest]) -> find_stream(Type, Rest).
 
 stream_field(_Key, undefined) -> undefined;
 stream_field(Key, Stream) -> maps:get(Key, Stream, undefined).
