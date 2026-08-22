@@ -1036,27 +1036,61 @@ processes staying alive):
   (`get_channels_page`, `get_video_clips_page`, `get_video_clip_by_id`).
   `stream_live_channel_by_id` — not applicable, same live-scope cut.
 - Item 10 (macula-realm `tube`/catalog/LiveViews) — **not started.**
-- Item 11's Content half (logo/thumbnail put via `macula_feeder`) —
-  **not started** — it's invoked inline from the owner's own HTML
-  upload/configure forms, which don't exist yet (see below).
+- Item 11's Content half (logo/thumbnail put via `macula_feeder`) — **done**,
+  see §15 below.
 
 **New, not on the original punch list, added during crafting:**
 `tube.video_clip_viewed_v1` mesh fact (own topic, separate from the
 catalog rendezvous topic) — see the streamer/view-count corrections
 earlier in this file.
 
-**Not started at all: the owner-facing web UI** (spec §4 — configure/
-upload/publish/retract/archive as cowboy+htmx HTML, §8.1). Every CMD
-desk (`maybe_*:dispatch/1`) and QRY read route needed to build it exists
-and is tested; the HTML/form/htmx layer itself, and the Content-put
-calls that belong inside it, are the next session's starting point,
-before or alongside the macula-realm side.
+---
 
-Environment note for whoever resumes: this repo depends on `macula` and
-`hecate_om` via hex (`~> 9.0` / `~> 0.13`), but the crafting session's
-`hecate_om` facade addition (`mesh_handles/0`, `realm/0`, `keypair/0`)
-and the `macula` streamer fix are only local, uncommitted changes in
-their own repos — `_checkouts/macula` and `_checkouts/hecate_om`
-symlinks in this repo make the local build pick them up (see finding 9
-above). Neither has been published to hex; don't assume a plain
-`rebar3 get-deps` elsewhere will see either fix until that happens.
+## 15. Owner-facing web UI + hex/deploy chain (2026-08-22, same day, continued)
+
+**Hex chain closed.** `macula` 10.0.0 and `hecate_om` 0.14.0 are both
+published for real. This repo's `rebar.config` moved off the dev-time
+`_checkouts/` symlinks (finding 9, now historical) onto `{macula, "~>
+10.0"}` / `{hecate_om, "~> 0.14"}` — verified against a genuine fresh hex
+fetch (`rebar.lock`'s resolved `pkg` versions checked, not a checkout),
+32/32 eunit passing.
+
+**Deployed and mesh-connected.** `github.com/hecate-services/hecate-tube`
+now exists (it didn't before), CI green, `ghcr.io/hecate-services/hecate-tube`
+public. Running on beam02 via `macula-demo/infrastructure`'s pull-based
+reconciler — confirmed live, not just "should work": `/health` green, and
+`hecate_om:macula_client()` on the running node returns `{ok, Pid}`, a
+genuine attached mesh pool under the `io.macula` realm through
+`station-de-frankfurt.macula.io`. `HECATE_REALM` is deliberately
+`macula_realm:id(<<"io.macula">>)`'s own tag on every hecate-tube
+deployment that wants to show up on the shared catalog later, not a
+fleet-internal realm — see the macula-demo commit for the full rationale.
+
+**The owner-facing web UI is built.** Plain cowboy-rendered HTML forms, no
+JS/htmx (htmx was always optional per §8.1's own resolution, and can't be
+vendored without an external fetch this repo's self-hosted conventions
+avoid anyway) — full-page POST+redirect (PRG), living in the top-level
+`hecate_tube` app rather than `query_tube` (whose own name promises a
+read-only JSON API). Pages: dashboard (channel card + clip grid),
+configure (one form serves both `initiate_channel` and
+`reconfigure_channel`), clip upload, publish/retract/archive as pure POST
+actions. The video file streams straight to disk
+(`cowboy_req:read_part_body/2`'s `{more, Data, Req}` loop, never buffered
+whole) via a new shared `tube_multipart` helper; logo/thumbnail images are
+small enough to buffer and go through Content via a new synchronous
+`macula_feeder`-wrapping helper (`tube_content_put`), degrading to no-op
+when the mesh is dark. Every user-supplied field is HTML-escaped on
+render (`tube_html:escape/1`) — this app's one deliberate stored-XSS
+guard, since owner-typed text round-trips through the owner's own browser
+on every page load.
+
+Verified live end to end, not just compiled: booted the real release,
+drove the actual endpoints with `curl` (multipart configure, multipart
+clip upload with a real file confirmed byte-for-byte on disk, then
+publish → retract → archive), confirmed each transition via the JSON read
+API.
+
+**What's left, unchanged from §14's own list:** the macula-realm side
+(`tube`/catalog/`TubeLive`/`VideoLive`) is the only remaining MVP-scope
+item not started. Live broadcast (`go_live`/`end_live`, §9.3's live-ingest
+gap) stays parked, per the owner's own MVP cut.
