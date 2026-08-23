@@ -10,7 +10,9 @@
 
 init(_Args) -> {ok, undefined}.
 
-handle_request(#{<<"clip_id">> := ClipId}, State) ->
+%% `clip_id' arrives as an atom key, not a binary -- see
+%% stream_video_clip_by_id.erl's handle_open/2 for why.
+handle_request(#{clip_id := ClipId}, State) ->
     reply_from(project_tube_store:get_clip(ClipId), State);
 handle_request(_Payload, State) ->
     {error, bad_request, State}.
