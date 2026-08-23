@@ -14,6 +14,7 @@
 -module(tube_video_clip_upload_page).
 
 -export([init/2, routes/0]).
+-export([accepted_message/1, format_duration/1, format_size/1]). %% for tests
 
 routes() -> [{"/owner/clips/upload", ?MODULE, []}].
 
@@ -71,15 +72,15 @@ put_thumbnail(<<>>) -> {ok, undefined};
 put_thumbnail(Bytes) -> tube_content_put:put(Bytes).
 
 reply_with_result({ok, _ClipId, _Version, Events}, Req1, State) ->
-    reply_for_verdict(rejection_reason(Events), Req1, State);
+    reply_for_verdict(rejection_reason(Events), Events, Req1, State);
 reply_with_result({error, Reason}, Req1, State) ->
     tube_owner_http:redirect(<<"/owner/clips/upload">>,
         tube_owner_http:error_message(<<"Could not upload the clip: ">>, Reason), Req1, State).
 
-reply_for_verdict(undefined, Req1, State) ->
-    tube_owner_http:redirect(<<"/">>, <<"Clip uploaded, private until you publish it.">>,
+reply_for_verdict(undefined, Events, Req1, State) ->
+    tube_owner_http:redirect(<<"/">>, accepted_message(scanned_measurements(Events)),
                              Req1, State);
-reply_for_verdict(Reason, Req1, State) ->
+reply_for_verdict(Reason, _Events, Req1, State) ->
     %% Not tube_owner_http:error_message/2 -- Reason is already a
     %% clean, human-formatted binary (video_clip_rejected_v1's own
     %% reason_to_binary/1), and error_message/2's `~p' formatting
@@ -95,6 +96,38 @@ is_rejected_event(Event) ->
 
 reason_from([#{reason := Reason} | _]) -> Reason;
 reason_from([]) -> undefined.
+
+%% `video_clip_scanned_v1' carries the ffprobe measurements
+%% (video_clip_scan.erl) -- already computed synchronously as part of
+%% this same upload, just never surfaced to the owner before.
+scanned_measurements(Events) ->
+    measurements_from(lists:filter(fun is_scanned_event/1, Events)).
+
+is_scanned_event(Event) ->
+    maps:get(event_type, Event, undefined) =:= <<"video_clip_scanned_v1">>.
+
+measurements_from([#{duration_ms := DurationMs, file_size_bytes := FileSizeBytes} | _]) ->
+    {DurationMs, FileSizeBytes};
+measurements_from([]) ->
+    undefined.
+
+accepted_message(undefined) ->
+    <<"Clip uploaded, private until you publish it.">>;
+accepted_message({DurationMs, FileSizeBytes}) ->
+    iolist_to_binary([<<"Clip uploaded (">>, format_duration(DurationMs), <<", ">>,
+                      format_size(FileSizeBytes),
+                      <<"), private until you publish it.">>]).
+
+format_duration(DurationMs) when is_integer(DurationMs) ->
+    TotalSeconds = DurationMs div 1000,
+    Minutes = TotalSeconds div 60,
+    Seconds = TotalSeconds rem 60,
+    iolist_to_binary(io_lib:format("~2..0B:~2..0B", [Minutes, Seconds])).
+
+format_size(Bytes) when is_integer(Bytes), Bytes >= 1_000_000 ->
+    iolist_to_binary(io_lib:format("~.1fMB", [Bytes / 1_000_000]));
+format_size(Bytes) when is_integer(Bytes) ->
+    iolist_to_binary(io_lib:format("~.1fKB", [Bytes / 1_000])).
 
 existing_channel() ->
     case project_tube_store:list_channels() of
