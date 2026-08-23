@@ -580,5 +580,40 @@ row) but wasn't asked for in this pass and is its own explicit
 decision, matching how every other realm-facing change this session
 got its own confirmation step.
 
-**Not yet committed or pushed** -- everything above exists only in
-this working tree until the next commit.
+**Committed, pushed, deployed** (2026-08-23, same day) -- corrected
+from the "not yet committed" note this section originally closed
+with. Also shipped in the same wave, live-verified against beam02's
+real channel (all four caught things this session's local-only
+testing couldn't have): the upload form reordered (video file first,
+then metadata -- title/description/tags were awkwardly ahead of the
+thing they describe), the channel logo actually renders now
+(`tube_content_get.erl` + `GET /owner/content/:mcid_hex`, both new),
+and a real bug in that: `macula_download:start_link_direct` can only
+resolve *chunked* content via its DHT `content_announcement` -- a
+small logo is nowhere near that threshold and 404'd even seconds
+after the station's own upload, fixed by switching to pooled
+`macula_download:start_link/4,5` to match how `tube_content_put`
+already puts small content via the pooled `macula_feeder`, not
+`_direct`.
+
+### 16.5 Open: the owner upload flow's UX is dated, revisit later
+
+Raised after the scan pipeline shipped, not actioned: the upload form
+is a plain `<input type="file">` + a separate `Upload` submit button,
+full-page POST+redirect, zero client-side feedback between "file
+selected" and "redirect back with a flash message" -- no drag-and-
+drop, no inline progress, no visible "scanning..." state, nothing
+happens at all until the owner notices the Upload button and clicks
+it. This was a deliberate call at design time (no JS/htmx, see PART1
+§8.1's resolution and the async-vs-inline reasoning in §16.4), correct
+for what it was solving then, but the owner-facing result reads as
+dated next to how uploads work on any real platform today.
+
+Not scoped or designed here -- explicitly deferred, "for now" (the
+owner's own words) doing it manually through the current form. Revisit
+as its own pass: whether this actually needs JS/htmx after all (the
+no-JS decision predates the scan pipeline, which is exactly the kind
+of multi-second, no-feedback gap that makes the tradeoff worth
+re-litigating), or whether a plain-HTML incremental improvement
+(e.g. an intermediate "uploading, please wait" interstitial page) gets
+most of the value without reopening that decision.
