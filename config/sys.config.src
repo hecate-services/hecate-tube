@@ -8,6 +8,19 @@
         {station_socket,    "/run/macula/station.sock"},
         {health_port,       ${HECATE_HEALTH_PORT}},
         {capability_topic,  <<"_mesh.cap.">>},
+        %% Without this, hecate_om_identity:keypair/0 stays {error,
+        %% no_keypair} forever (hecate_om >= 0.14.1 self-heals by
+        %% generating+persisting one here on first boot, but only once
+        %% a path is actually configured) -- and this service's whole
+        %% job is a direct-dial RPC/Streaming PROVIDER, which cannot
+        %% sign an advertisement without a stable keypair. Confirmed
+        %% live: tube_mesh_providers retried every 5s and never once
+        %% succeeded, silently, since this service's first deployment,
+        %% before this line existed. Under `${HECATE_DATA_DIR}' (the
+        %% same persistent volume clips/tube_store already live on),
+        %% not `/etc/hecate/secrets' -- this is a self-generated
+        %% peering identity, not an operator-provisioned credential.
+        {identity_key_path, "${HECATE_DATA_DIR}/identity/keypair.erl.bin"},
         %% THE REALM IS AN APPLICATION ENV, NOT A SHELL VARIABLE, and this file
         %% is the only place the two meet. hecate_om_identity:realm() reads
         %% application:get_env(hecate_om, realm); exporting HECATE_REALM in the
