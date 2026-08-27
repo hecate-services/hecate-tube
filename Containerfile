@@ -66,7 +66,14 @@ FROM docker.io/alpine:3.22
 # private by accident failed its first pull with a bare "unauthorized", which
 # names nothing and sends you looking in the wrong place.
 LABEL org.opencontainers.image.source="https://github.com/hecate-services/hecate-tube"
-RUN apk add --no-cache ncurses-libs libstdc++ libgcc openssl ca-certificates curl ffmpeg
+# zstd-libs, snappy, lz4-libs: the *runtime* shared libraries matching the
+# builder stage's zstd-dev/snappy-dev/lz4-dev. Confirmed live 2026-08-27
+# these are genuinely separate packages on Alpine (dev vs runtime, same
+# split as openssl/openssl-dev) -- erocksdb's NIF linked against
+# liblz4.so.1 at build time, then failed to LOAD it at boot with "Error
+# loading shared library liblz4.so.1: No such file or directory", crash-
+# looping the whole release. A clean build proves nothing here either.
+RUN apk add --no-cache ncurses-libs libstdc++ libgcc openssl ca-certificates curl ffmpeg zstd-libs snappy lz4-libs
 WORKDIR /app
 COPY --from=builder /build/_build/prod/rel/hecate_tube ./
 
