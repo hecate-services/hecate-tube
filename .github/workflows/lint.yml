@@ -20,6 +20,13 @@ jobs:
       - uses: actions/checkout@v4
       # video_clip_scan.erl's tests shell out to ffprobe/ffmpeg against a
       # real fixture -- the erlang:28 image doesn't ship them.
-      - run: apt-get update && apt-get install -y --no-install-recommends ffmpeg
+      #
+      # cmake, build-essential: this service has its own reckon-db store,
+      # pulling in khepri/ra/reckon_db's own RocksDB-backed native deps --
+      # same gap found and fixed today in hecate-warden/hecate-sentinel's
+      # lint.yml (there via hecate_om 0.15's barrel_docdb). Newly exposed
+      # here, not newly introduced: this job hadn't run a genuinely fresh
+      # dependency fetch in a while.
+      - run: apt-get update && apt-get install -y --no-install-recommends ffmpeg cmake build-essential
       - run: rebar3 lint
       - run: rebar3 eunit
