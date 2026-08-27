@@ -24,14 +24,23 @@ WORKDIR /build
 # recorded glibc trap: the fetched artifact loads on the build host and fails on
 # alpine at runtime.
 #
-# openssl-dev, zstd-dev: this service has its own reckon-db store
-# (store_id/0 + data_dir/0), pulling in khepri/ra/reckon_db's own
-# RocksDB-backed native deps. Their CMake build does find_package(OpenSSL)
-# and fails outright without the dev headers (runtime openssl in stage 2
-# isn't enough); without zstd-dev it falls back to building zstd from a
-# bundled/vendored copy the hex package doesn't actually ship, failing with
-# "No download info given for 'zstd'".
-RUN apk add --no-cache git curl bash build-base cmake perl linux-headers openssl-dev zstd-dev
+# This service has its own reckon-db store (store_id/0 + data_dir/0),
+# pulling in khepri/ra/reckon_db's own RocksDB-backed native deps.
+# erocksdb's CMake build:
+#   - openssl-dev: does find_package(OpenSSL) and fails outright without the
+#     dev headers (runtime openssl in stage 2 isn't enough).
+#   - zstd-dev: without it, falls back to building zstd from a
+#     bundled/vendored copy the hex package doesn't actually ship, failing
+#     with "No download info given for 'zstd'".
+#   - snappy-dev, lz4-dev: unlike zstd, a missing system snappy/lz4 does NOT
+#     fail the CMake configure — it silently disables that compression
+#     backend and the build succeeds. The break only shows up at RUNTIME
+#     (confirmed live 2026-08-27 in a sibling service: barrel_docdb's
+#     db_open failed with "specified blob compression type Snappy is not
+#     available" the moment a real database was opened). A clean build is
+#     not proof this is fixed — only starting the release and opening a
+#     store is.
+RUN apk add --no-cache git curl bash build-base cmake perl linux-headers openssl-dev zstd-dev snappy-dev lz4-dev
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         | sh -s -- -y --default-toolchain stable --profile minimal
 ENV PATH="/root/.cargo/bin:${PATH}"
