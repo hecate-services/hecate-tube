@@ -19,6 +19,9 @@
 
 -export([put/1]).
 -export([init/1, handle_fed/2]).
+%% Exported for tube_content_put_tests.erl -- pure logic, same testing
+%% convention tube_mesh_providers_tests.erl already uses for reuse_opts/1.
+-export([persist_then_return/2]).
 
 -define(TIMEOUT_MS, 30_000).
 
@@ -27,7 +30,7 @@ put(Bytes) when is_binary(Bytes) ->
     persist_then_return(put_via(hecate_om:mesh_handles(), Bytes), Bytes).
 
 persist_then_return({ok, Mcid}, Bytes) when is_binary(Mcid) ->
-    ok = tube_content_store:persist(binary:encode_hex(Mcid, lower), Bytes),
+    ok = tube_content_store:persist(binary:encode_hex(Mcid, lowercase), Bytes),
     {ok, Mcid};
 persist_then_return(Result, _Bytes) ->
     Result.
