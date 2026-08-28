@@ -7,6 +7,12 @@
 %% Degrades to `{ok, undefined}' (no logo/thumbnail, not an error) when the
 %% mesh is unreachable -- an owner configuring a channel offline shouldn't
 %% be blocked by a missing mesh connection for an optional image.
+%%
+%% ALSO persists a durable local copy via `tube_content_store', keyed by
+%% the minted MCID. `macula:put_content/2' (which macula_feeder drives) is
+%% a one-time peer-to-peer transfer, not storage -- nothing else retains
+%% the bytes past that single push, so a later, unrelated caller's
+%% `tube.lookup_content' request is served from this local copy instead.
 -module(tube_content_put).
 
 -behaviour(macula_feeder).
@@ -18,7 +24,13 @@
 
 -spec put(binary()) -> {ok, binary() | undefined} | {error, term()}.
 put(Bytes) when is_binary(Bytes) ->
-    put_via(hecate_om:mesh_handles(), Bytes).
+    persist_then_return(put_via(hecate_om:mesh_handles(), Bytes), Bytes).
+
+persist_then_return({ok, Mcid}, Bytes) when is_binary(Mcid) ->
+    ok = tube_content_store:persist(binary:encode_hex(Mcid, lower), Bytes),
+    {ok, Mcid};
+persist_then_return(Result, _Bytes) ->
+    Result.
 
 put_via({ok, Pool, Realm}, Bytes) ->
     {ok, Pid} = macula_feeder:start_link(?MODULE, Pool, Realm, Bytes, self()),

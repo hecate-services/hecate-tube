@@ -1,6 +1,6 @@
 %% @doc Advertises hecate-tube's mesh-facing RPC and Streaming providers
-%% (tube.lookup_channel, tube.lookup_video_clip, tube.watch_video_clip)
-%% via direct-dial, retrying until the mesh pool and this service's
+%% (tube.lookup_channel, tube.lookup_video_clip, tube.watch_video_clip,
+%% tube.lookup_content) via direct-dial, retrying until the mesh pool and this service's
 %% keypair are both available -- hecate_om_identity connects off its own
 %% init path, asynchronously, so a single inline attempt at boot can
 %% race it and lose, the same race hecate_om_identity's own retry exists
@@ -58,9 +58,13 @@ try_advertise({ok, Pool, Realm}, {ok, KeyPair}, State) ->
     {ok, StreamSup} = macula_streamer:advertise_direct(
         Pool, Realm, <<"tube.watch_video_clip">>, stream_video_clip_by_id, [],
         KeyPair, Opts(stream_sup)),
+    {ok, ContentSup} = macula_response:advertise_direct(
+        Pool, Realm, <<"tube.lookup_content">>, advertise_content_lookup, [],
+        KeyPair, Opts(content_sup)),
     erlang:send_after(?READVERTISE_MS, self(), advertise),
     State#{advertised => true, channel_sup => ChannelSup,
-          clip_sup => ClipSup, stream_sup => StreamSup};
+          clip_sup => ClipSup, stream_sup => StreamSup,
+          content_sup => ContentSup};
 try_advertise(_MeshHandles, _KeyPair, State) ->
     erlang:send_after(?RETRY_MS, self(), advertise),
     State.
