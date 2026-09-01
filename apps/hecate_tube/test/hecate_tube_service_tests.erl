@@ -58,11 +58,36 @@ info_version_matches_the_application_test() ->
 health_is_green_test() ->
     ?assertEqual(ok, ?SERVICE:health()).
 
-%% An empty list is the correct answer for a service that does nothing yet. The
-%% assertion is here so that adding a capability breaks a test and makes someone
-%% write down what the service can now actually do.
-announces_no_capability_yet_test() ->
-    ?assertEqual([], ?SERVICE:capabilities()).
+%% Exactly four -- catches an accidental fifth entry, or one of the two
+%% tests below silently missing a dropped capability because it only
+%% checks its own subset.
+capabilities_has_no_stray_entries_test() ->
+    ?assertEqual(4, length(?SERVICE:capabilities())).
+
+%% Pins the shape hecate_om_capabilities destructures (name, version,
+%% handler) for the three macula_response-backed providers -- `kind' is
+%% absent on all three (macula_response is the implicit default).
+announces_the_three_response_capabilities_test() ->
+    Caps = ?SERVICE:capabilities(),
+    ResponseCaps = [C || C <- Caps, not maps:is_key(kind, C)],
+    ?assertEqual(3, length(ResponseCaps)),
+    ?assertEqual(
+       [{<<"tube.lookup_channel">>, advertise_channel_lookup},
+        {<<"tube.lookup_video_clip">>, advertise_video_clip_lookup},
+        {<<"tube.lookup_content">>, advertise_content_lookup}],
+       [{Name, Mod} || #{name := Name, version := 1, handler := {Mod, []}} <- ResponseCaps]).
+
+%% tube.watch_video_clip is macula_streamer-backed (hecate_om 0.18.0's
+%% streamer capability kind) -- pinned separately from the three
+%% response-kind ones above so a `kind' typo (streamer vs response, or a
+%% dropped key entirely) fails loudly here rather than as a mesh peer's
+%% confusing "no such procedure" once advertise_one/6 dispatches it
+%% through the wrong provider module.
+announces_the_streaming_capability_test() ->
+    Caps = ?SERVICE:capabilities(),
+    [StreamCap] = [C || C = #{name := <<"tube.watch_video_clip">>} <- Caps],
+    ?assertMatch(#{version := 1, handler := {stream_video_clip_by_id, []},
+                  kind := streamer}, StreamCap).
 
 identity_spec_has_the_shape_hecate_om_expects_test() ->
     #{scope := Scope, actions := Actions,
@@ -72,12 +97,15 @@ identity_spec_has_the_shape_hecate_om_expects_test() ->
     ?assert(is_list(Resources)),
     ?assert(is_integer(Ttl) andalso Ttl > 0).
 
-%% A resource this service is not authorised for is a publish the realm would
-%% refuse once UCAN delegation lands. Asking for nothing and claiming nothing
-%% must stay in step, so the two are asserted together.
-authority_matches_what_is_announced_test() ->
+%% This service publishes and subscribes to no realm-scoped topics -- all
+%% four capabilities are direct-dial (macula_response or
+%% macula_streamer), authorised by this service's own signing keypair
+%% (hecate_om_identity), not by realm-granted pubsub actions/resources.
+%% Asking for neither is still the honest answer, independently of the
+%% capability tests above -- same pattern as
+%% hecate_stations_service_tests.erl.
+authority_asks_for_no_pubsub_topics_test() ->
     #{actions := Actions, resources := Resources} = ?SERVICE:identity_spec(),
-    ?assertEqual([], ?SERVICE:capabilities()),
     ?assertEqual([], Actions),
     ?assertEqual([], Resources).
 

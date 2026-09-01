@@ -5,12 +5,9 @@
 %% watching. The `-behaviour' attribute below is what turns that into a compile
 %% error instead, and the generated test suite guards the attribute itself.
 %%
-%% IT ANNOUNCES NOTHING AND ASKS FOR NOTHING, on purpose. A service that does
-%% nothing yet has no capability to offer and needs no authority from the realm.
-%% Advertising a capability before it exists puts a lie on the mesh that another
-%% service can find and call. Both lists grow when the thing they name exists,
-%% and a generated test fails when they change, so growing them is a deliberate
-%% act rather than a comment someone forgot.
+%% Both lists grow when the thing they name exists, and a generated test
+%% fails when they change, so growing them is a deliberate act rather
+%% than a comment someone forgot.
 -module(hecate_tube_service).
 
 -behaviour(hecate_om_service).
@@ -34,7 +31,28 @@ health() -> ok.
 
 %% WHAT THIS SERVICE ANNOUNCES IT CAN DO. Other services find this one by these
 %% names, so each entry is a promise that something answers.
-capabilities() -> [].
+%%
+%% tube.watch_video_clip carries `kind => streamer' (hecate_om 0.18.0+):
+%% it's macula_streamer-backed, not macula_response-backed like the other
+%% three, so hecate_om_capabilities:advertise_one/6 dispatches it through
+%% macula_streamer:advertise_direct/7 instead -- see
+%% hecate_om_service:capability/0's own doc. All four are advertised
+%% generically by hecate_om:boot/1 now; query_tube_sup no longer owns a
+%% bespoke advertise loop.
+capabilities() ->
+    [#{name    => <<"tube.lookup_channel">>,
+       version => 1,
+       handler => {advertise_channel_lookup, []}},
+     #{name    => <<"tube.lookup_video_clip">>,
+       version => 1,
+       handler => {advertise_video_clip_lookup, []}},
+     #{name    => <<"tube.lookup_content">>,
+       version => 1,
+       handler => {advertise_content_lookup, []}},
+     #{name    => <<"tube.watch_video_clip">>,
+       version => 1,
+       handler => {stream_video_clip_by_id, []},
+       kind    => streamer}].
 
 %% THE AUTHORITY THIS SERVICE ASKS THE REALM FOR, and deliberately nothing more.
 %% Ask for exactly the topics you publish and subscribe to. Popped, an attacker
