@@ -16,15 +16,17 @@
 
 init(_Args) -> {ok, undefined}.
 
-%% `clip_id' arrives as an atom key, not a binary -- macula's frame
-%% decoder round-trips any map key through binary_to_existing_atom/1
-%% when the receiving VM already knows that atom (it does here; see
-%% project_tube_store's own row shape), so the wire's `#{clip_id =>
-%% ...}` never decodes to `#{<<"clip_id">> => ...}'. Confirmed live
-%% via macula_frame:stream_open/1 + encode/1 + decode/1 round-trip.
-handle_open(#{clip_id := ClipId}, State) ->
+%% `clip_id' is read through hecate_om_wire:field/2, not matched as an
+%% atom key: macula's frame decoder makes a key an atom only when that
+%% atom already exists in this VM, and leaves it as sent otherwise.
+%% field/2 is the one place that knows the forms a key can take, and it
+%% also unwraps a text value.
+handle_open(StreamArgs, State) ->
+    open_clip(hecate_om_wire:field(clip_id, StreamArgs), State).
+
+open_clip(ClipId, State) when is_binary(ClipId) ->
     open_from(project_tube_store:get_clip(ClipId), ClipId, State);
-handle_open(_StreamArgs, State) ->
+open_clip(_Missing, State) ->
     {stop, bad_request, State}.
 
 open_from({ok, #{status := <<"published">>, local_ref := LocalRef} = Row}, ClipId, State) ->

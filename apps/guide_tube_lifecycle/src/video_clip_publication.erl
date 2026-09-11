@@ -13,7 +13,7 @@
 %% catalog consumer. See plans/EVENT_STORM_HECATE_TUBE.md sec 16.2.
 -module(video_clip_publication).
 
--export([publish_to_mesh/1, withdraw_from_mesh/1]).
+-export([publish_to_mesh/1, withdraw_from_mesh/1, fact/2]).
 
 -define(PUBLISHED_TOPIC, <<"io.macula/tube-commons/tube/video_clip_published_v1">>).
 -define(RETRACTED_TOPIC, <<"io.macula/tube-commons/tube/video_clip_retracted_v1">>).
@@ -29,18 +29,25 @@ send(Topic, Data) ->
                   field(clip_id, Data)).
 
 send_from_row(Topic, {ok, Row}, ClipId) ->
-    Fact = #{
-        clip_id        => ClipId,
-        channel_id     => maps:get(channel_id, Row, undefined),
-        name           => maps:get(name, Row, undefined),
-        description    => maps:get(description, Row, undefined),
-        tags           => maps:get(tags, Row, []),
-        thumbnail_mcid => maps:get(thumbnail_mcid, Row, undefined),
-        sent_at        => erlang:system_time(millisecond)
-    },
-    publish(Topic, Fact);
+    publish(Topic, fact(Row, ClipId));
 send_from_row(_Topic, {error, not_found}, _ClipId) ->
     ok.
+
+%% @doc The `video_clip_published_v1' and `video_clip_retracted_v1' fact
+%% for a clip row. Text fields go out as `{text, Bin}', a CBOR text
+%% string. A bare binary is a CBOR byte string, which non-BEAM subscribers
+%% receive as bytes. Ids and the thumbnail mcid stay bytes.
+-spec fact(map(), binary()) -> map().
+fact(Row, ClipId) ->
+    #{
+        clip_id        => ClipId,
+        channel_id     => maps:get(channel_id, Row, undefined),
+        name           => text(maps:get(name, Row, undefined)),
+        description    => text(maps:get(description, Row, undefined)),
+        tags           => [text(Tag) || Tag <- maps:get(tags, Row, [])],
+        thumbnail_mcid => maps:get(thumbnail_mcid, Row, undefined),
+        sent_at        => erlang:system_time(millisecond)
+    }.
 
 publish(Topic, Fact) ->
     publish_via(Topic, hecate_om:mesh_handles(), Fact).
@@ -51,6 +58,9 @@ publish_via(Topic, {ok, Pool, Realm}, Fact) ->
     ok;
 publish_via(_Topic, {error, _}, _Fact) ->
     ok.
+
+text(undefined) -> undefined;
+text(Bin) when is_binary(Bin) -> {text, Bin}.
 
 field(Key, Map) when is_atom(Key) ->
     BinKey = atom_to_binary(Key, utf8),

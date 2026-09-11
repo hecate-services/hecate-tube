@@ -37,6 +37,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   days, like every other hecate-service. Needs `macula >= 10.11.1` (bumped
   10.10.0 -> 10.14.4), below which `macula_direct_dial:adv_opts/1` dropped
   `ttl_ms` even when passed.
+- The `tube.lookup_channel` and `tube.lookup_video_clip` replies, and the
+  `channel_announced_v1`, `video_clip_published_v1` and
+  `video_clip_retracted_v1` facts, send names, descriptions, owners, tags
+  and the announcement's `action` as CBOR text (`{text, Bin}`) instead of
+  byte strings, so non-BEAM consumers (macula-mcp, macula-cli, the SDKs)
+  get strings. Ids and mcids stay bytes. (hecate-tube#2)
+- `tube.watch_video_clip`, `tube.lookup_channel` and `tube.lookup_video_clip`
+  read their id through `hecate_om_wire:field/2` instead of matching an atom
+  key, and unwrap an id sent as text. macula's decoder makes a key an atom
+  only when that atom is already loaded, so an atom-only match depended on
+  load order. `field/2` finds the binary form today; the `{text, Bin}` form a
+  missing atom produces needs the hecate_om release with hecate-om#1.
+  (hecate-tube#3)
+- CI: `lint-and-test` installs a Rust toolchain. macula's
+  `macula_cbor_nif` compile hook fails the build without cargo rather than
+  skip.
 
 ### Removed
 

@@ -6,7 +6,7 @@
 %% this workspace, hence the heartbeat exists at all).
 -module(channel_announcement).
 
--export([announce/2]).
+-export([announce/2, fact/3]).
 
 -define(TOPIC, <<"io.macula/tube-commons/tube/channel_announced_v1">>).
 
@@ -16,20 +16,27 @@ announce(ChannelId, Action) ->
     publish_from_row(project_tube_store:get_channel(ChannelId), ChannelId, Action).
 
 publish_from_row({ok, Row}, ChannelId, Action) ->
-    Fact = #{
+    publish(fact(Row, ChannelId, Action));
+publish_from_row({error, not_found}, _ChannelId, _Action) ->
+    ok.
+
+%% @doc The `channel_announced_v1' fact for a channel row. Text fields go
+%% out as `{text, Bin}', a CBOR text string. A bare binary is a CBOR byte
+%% string, which non-BEAM subscribers receive as bytes. The channel id and
+%% logo mcid stay bytes.
+-spec fact(map(), binary(), binary()) -> map().
+fact(Row, ChannelId, Action) ->
+    #{
         channel_id           => ChannelId,
-        action                => Action,
-        name                  => maps:get(name, Row, undefined),
-        description           => maps:get(description, Row, undefined),
-        owner                 => maps:get(owner, Row, undefined),
-        tags                  => maps:get(tags, Row, []),
+        action                => text(Action),
+        name                  => text(maps:get(name, Row, undefined)),
+        description           => text(maps:get(description, Row, undefined)),
+        owner                 => text(maps:get(owner, Row, undefined)),
+        tags                  => [text(Tag) || Tag <- maps:get(tags, Row, [])],
         logo_mcid             => maps:get(logo_mcid, Row, undefined),
         published_clip_count  => published_clip_count(ChannelId),
         announced_at          => erlang:system_time(millisecond)
-    },
-    publish(Fact);
-publish_from_row({error, not_found}, _ChannelId, _Action) ->
-    ok.
+    }.
 
 %% `status' on a clip row is the read model's own display-friendly
 %% binary (project_tube's video_clip_lifecycle_to_video_clips.erl), not
@@ -38,6 +45,9 @@ publish_from_row({error, not_found}, _ChannelId, _Action) ->
 published_clip_count(ChannelId) ->
     length([C || C <- project_tube_store:list_clips_by_channel(ChannelId),
                 maps:get(status, C, undefined) =:= <<"published">>]).
+
+text(undefined) -> undefined;
+text(Bin) when is_binary(Bin) -> {text, Bin}.
 
 publish(Fact) ->
     publish_via(hecate_om:mesh_handles(), Fact).

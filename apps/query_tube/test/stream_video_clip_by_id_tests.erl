@@ -10,14 +10,11 @@ teardown(Store) ->
     _ = catch gen_server:stop(Store),
     ok.
 
-%% Regression: macula's frame decoder round-trips a known map key
-%% through binary_to_existing_atom/1, so `args' arrives as
-%% `#{clip_id => ...}' (atom key), never `#{<<"clip_id">> => ...}'
-%% (binary key). Confirmed live via a macula_frame:stream_open/1 +
-%% encode/1 + decode/1 round-trip. A wrongly-binary-keyed match clause
-%% falls through to the catch-all and rejects every real call with
-%% `bad_request' — this pins the atom-keyed clause as the one that
-%% actually fires.
+%% macula's frame decoder makes `clip_id' an atom key only when the atom
+%% already exists in the receiving VM; otherwise the key stays as it was
+%% sent. A handler that matched only the atom form rejected every other
+%% form with `bad_request'. Each case below reaches the store lookup and
+%% gets `not_found' for an unknown clip instead.
 atom_keyed_args_are_not_rejected_as_bad_request_test_() ->
     {setup, fun setup/0, fun teardown/1,
      fun(_Store) ->
@@ -28,12 +25,31 @@ atom_keyed_args_are_not_rejected_as_bad_request_test_() ->
         end
      end}.
 
-binary_keyed_args_are_rejected_test_() ->
+binary_keyed_args_are_not_rejected_as_bad_request_test_() ->
     {setup, fun setup/0, fun teardown/1,
      fun(_Store) ->
         fun() ->
             Result = stream_video_clip_by_id:handle_open(
                        #{<<"clip_id">> => <<"nonexistent-clip">>}, undefined),
-            ?assertEqual({stop, bad_request, undefined}, Result)
+            ?assertEqual({stop, not_found, undefined}, Result)
+        end
+     end}.
+
+text_valued_clip_id_is_not_rejected_as_bad_request_test_() ->
+    {setup, fun setup/0, fun teardown/1,
+     fun(_Store) ->
+        fun() ->
+            Result = stream_video_clip_by_id:handle_open(
+                       #{clip_id => {text, <<"nonexistent-clip">>}}, undefined),
+            ?assertEqual({stop, not_found, undefined}, Result)
+        end
+     end}.
+
+missing_clip_id_is_a_bad_request_test_() ->
+    {setup, fun setup/0, fun teardown/1,
+     fun(_Store) ->
+        fun() ->
+            ?assertEqual({stop, bad_request, undefined},
+                         stream_video_clip_by_id:handle_open(#{}, undefined))
         end
      end}.

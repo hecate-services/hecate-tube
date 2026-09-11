@@ -11,20 +11,29 @@
 
 init(_Args) -> {ok, undefined}.
 
-%% `channel_id' arrives as an atom key, not a binary -- see
-%% stream_video_clip_by_id.erl's handle_open/2 for why.
-handle_request(#{channel_id := ChannelId}, State) ->
+%% `channel_id' is read through hecate_om_wire:field/2, not matched as an
+%% atom key: macula's frame decoder makes a key an atom only when that
+%% atom already exists in this VM, and leaves it as sent otherwise.
+%% field/2 is the one place that knows the forms a key can take, and it
+%% also unwraps a text value.
+handle_request(Args, State) ->
+    lookup_channel(hecate_om_wire:field(channel_id, Args), State).
+
+lookup_channel(ChannelId, State) when is_binary(ChannelId) ->
     reply_from(project_tube_store:get_channel(ChannelId), ChannelId, State);
-handle_request(_Payload, State) ->
+lookup_channel(_Missing, State) ->
     {error, bad_request, State}.
 
+%% Text fields go out as `{text, Bin}', a CBOR text string. A bare binary
+%% is a CBOR byte string, which non-BEAM callers receive as bytes. Ids and
+%% mcids stay bytes.
 reply_from({ok, Row}, ChannelId, State) ->
     {reply, #{
         channel_id  => ChannelId,
-        name        => maps:get(name, Row, undefined),
-        description => maps:get(description, Row, undefined),
-        owner       => maps:get(owner, Row, undefined),
-        tags        => maps:get(tags, Row, []),
+        name        => text(maps:get(name, Row, undefined)),
+        description => text(maps:get(description, Row, undefined)),
+        owner       => text(maps:get(owner, Row, undefined)),
+        tags        => [text(Tag) || Tag <- maps:get(tags, Row, [])],
         logo_mcid   => maps:get(logo_mcid, Row, undefined),
         clips       => published_clip_summaries(ChannelId)
     }, State};
@@ -38,7 +47,10 @@ published_clip_summaries(ChannelId) ->
 summary(C) ->
     #{
         clip_id        => maps:get(clip_id, C, undefined),
-        name           => maps:get(name, C, undefined),
+        name           => text(maps:get(name, C, undefined)),
         thumbnail_mcid => maps:get(thumbnail_mcid, C, undefined),
         view_count     => maps:get(view_count, C, 0)
     }.
+
+text(undefined) -> undefined;
+text(Bin) when is_binary(Bin) -> {text, Bin}.
