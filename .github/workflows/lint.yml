@@ -1,12 +1,17 @@
 # Structural lint and unit tests. Runs on the glibc erlang image, where macula
-# resolves a prebuilt QUIC NIF and no Rust toolchain is needed. The alpine image
-# build forces a source build instead; see the Containerfile for why.
+# resolves a prebuilt QUIC NIF. Its other NIFs always build from source, and
+# macula_cbor_nif's compile hook fails without cargo rather than skip, so this
+# job installs a Rust toolchain: the same step as hecate-om's service template
+# and hecate-stations. The alpine image build forces a source build of
+# everything; see the Containerfile for why.
 
 name: lint-and-test
 
+# A push on any branch runs these checks, so a CI change can be proven on a
+# branch before it reaches main. This job builds no image: build-push.yml
+# stays on main and tags only.
 on:
   push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -27,6 +32,13 @@ jobs:
       # lint.yml (there via hecate_om 0.15's barrel_docdb). Newly exposed
       # here, not newly introduced: this job hadn't run a genuinely fresh
       # dependency fetch in a while.
-      - run: apt-get update && apt-get install -y --no-install-recommends ffmpeg cmake build-essential
+      #
+      # curl: for the rustup installer below.
+      - run: apt-get update && apt-get install -y --no-install-recommends ffmpeg cmake build-essential curl
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - run: rebar3 lint
       - run: rebar3 eunit
